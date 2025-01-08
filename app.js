@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('pg');
 
 var app = express();
 app.set('port',process.env.PORT || 8080)
