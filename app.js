@@ -69,7 +69,7 @@ app.get('/daily',
                     res.status(500).json({"error": err });
                 } else {
                     if( rows.length > 0 ) {
-                        res.json( { "quote": rows[0].quote, "id": rows[0].quote_id, "author": rows[0].author, "genre": rows[0].genre } );	
+                        res.json( { "source": "CockroachDB", "quote": rows[0].quote, "id": rows[0].quote_id, "author": rows[0].author, "genre": rows[0].genre } );	
                     } else {
                         res.status(500).json({"error": "quote id " + quote_id + " doesn't exist." });
                     }
@@ -127,7 +127,7 @@ app.get('/random',
                             res.status(500).json({"error": error });
                         } else {
                             logMsg('Randome quote from ' + rows[0].author );
-                            res.json( { "quote": rows[0].quote, "id": rows[0].quote_id, "author": rows[0].author, "genre": rows[0].genre } );	
+                            res.json( { "source": "CockroachDB", "quote": rows[0].quote, "id": rows[0].quote_id, "author": rows[0].author, "genre": rows[0].genre } );	
                         }
                         logMsg('connection releasing');
                         connection.release();
