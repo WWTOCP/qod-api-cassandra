@@ -5,15 +5,6 @@ var app = express()
 app.set('port',process.env.PORT || 8081)
 
 const { Client } = pg
-const dbClient = new Client({
-    host: 'localhost',       // CockroachDB host
-    port: 26257,             // Default CockroachDB port
-    user: 'root',            // Username
-    password: '',            // Password (if any, leave empty for default)
-    database: 'qod',         // Specify the database you want to use
-    ssl: false               // Set to true if using SSL, or configure with cert details
-})
-dbClient.connect()
 
 function logMsg( msg ) {
     console.log(msg)
@@ -31,35 +22,12 @@ function getRandomInt(max) {
 	return Math.floor(Math.random() * Math.floor(max))
 }
 
-/*
-
-const pool  = pg.createPool({
-	host     : process.env.DB_HOST,
-	user     : process.env.DB_USER,
-	password : process.env.DB_PASS,
-    database : 'qod',
-    insecureAuth : true
-});
-*/
-
-var getConnection = function(res,callback) {
-    logMsg('getting connection from pool')
-    pool.getConnection(function(err, connection) {
-        if( err ) {
-            logErr('error getting connection: ' + err)
-            res.status(500).json({"error": err })
-            return
-        }
-        callback(connection)
-    })
-};
-
-var getCRConnection = function(res, callback) {
+var getConnection = function(res, callback) {
     const dbClient = new Client({
-        host: 'localhost',       // CockroachDB host
+        host: process.env.DB_HOST || 'localhost',       // CockroachDB host
         port: 26257,             // Default CockroachDB port
-        user: 'root',            // Username
-        password: '',            // Password (if any, leave empty for default)
+        user: process.env.DB_USER || 'root',            // Username
+        password: process.env.DB_PASS || '',            // Password (if any, leave empty for default)
         database: 'qod',         // Specify the database you want to use
         ssl: false               // Set to true if using SSL, or configure with cert details
     })
@@ -103,51 +71,52 @@ app.get('/author/:id',
 app.get('/daily', 	
 	async function(req, res) {
         logMsg('request: /daily')
-        //var quoteId = dailyQuoteId()
-        console.log(Number.MAX_SAFE_INTEGER); // 9007199254740991 or 9,007,199,254,740,991
-
-        let quoteId = 1037839461057462273n
-        console.log(`Attempting to retrieve quoteId: ${quoteId}`)
-        var sql = `SELECT
-                        quotes.quote_id, quotes.quote, authors.author, genres.genre
-                    FROM
-                        quotes, authors, genres
-                    WHERE 
-                        quotes.quote_id = $1
-                        AND quotes.author_id = authors.author_id
-                        AND quotes.genre_id = genres.genre_id;`
-        console.log(`SQL = ${sql}`)
-        try {
-            const dbres = await dbClient.query(sql, [quoteId])
-            console.log(`# of db rows: ${dbres.rows.length}`)
-            console.log(`Quote Id: ${quoteId} author name is: ${dbres.rows[0]?.author}`)
-            if( dbres.rows.length > 0 ) {
-                const quoteRow = dbres.rows[0]
-                res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
-            } else {
-                res.status(500).json({"error": `quote id ${quoteId} doesn't exist.` })
-            }
-        } catch (ex) {
-            console.log(ex)
-            res.status(500).json({"error": ex })
-        }
+        var quoteId = dailyQuoteId()
+        getConnection(res, function(connection) {
+            var sql = `SELECT
+                            quotes.quote_id, quotes.quote, authors.author, genres.genre
+                        FROM
+                            quotes, authors, genres
+                        WHERE 
+                            quotes.quote_id = $1
+                            AND quotes.author_id = authors.author_id
+                            AND quotes.genre_id = genres.genre_id;`
+            connection.query(sql, [quoteId], function(error, resp) {
+                logMsg('sql query completed')
+                if( error ) {
+                    logErr(error)
+                    res.status(500).json({"error": err })
+                } else {
+                    if( resp.rows.length > 0 ) {
+                        logMsg('sql query completed, rows: ' + resp.rows.length)
+                        const quoteRow = resp.rows[0]
+                        res.json( { "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
+                    } else {
+                        logErr('quote id ['+quote_id+'] not found')
+                        res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
+                    }
+                    logMsg('connection ending');
+                    connection.end();
+                }
+            })
+        })
     }
 )
 
 app.get('/quotes/:id', function(req,res) {
 	var quote_id = req.params.id
     logMsg('request: /quotes/' + quote_id)
-	getCRConnection(res, function(connection) {
+	getConnection(res, function(connection) {
         var sql = `SELECT
                         quotes.quote_id, quotes.quote, authors.author, genres.genre
                     FROM
                         quotes, authors, genres
                     WHERE
-                        quote_id = $1 
+                        quotes.quote_id = $1 
                         AND quotes.author_id = authors.author_id 
                         AND quotes.genre_id = genres.genre_id;`;
         logMsg('query sql: ' + sql)
-		connection.query(sql, [quote_id], function (error, resp) {
+		connection.query(sql, [quote_id], function(error, resp) {
             logMsg('sql query completed')
             if( error ) {
                 logErr(error)
@@ -161,8 +130,8 @@ app.get('/quotes/:id', function(req,res) {
                     logErr('quote id ['+quote_id+'] not found')
 					res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
                 }
-                //logMsg('connection releasing');
-				//connection.release();
+                logMsg('connection ending');
+				connection.end();
 			}
 		});
 	});
@@ -172,27 +141,38 @@ app.get('/random',
 	function(req, res) {
         logMsg('request: /random');
 		getConnection(res,function(connection){
-            var sql = "SELECT COUNT(*) AS quote_count FROM quotes";
+            var sql = `SELECT
+                            COUNT(*) AS quote_count
+                        FROM
+                            quotes;`;
             logMsg('query sql: ' + sql)
-            connection.query(sql, function (error, results, fields) {
+            connection.query(sql, function (error, results) {
                 if( error ) {
                     logErr(error);
                     res.status(500).json({"error": error });
                 } else {
-                    var count = results[0].quote_count;
+                    var count = results.rows[0].quote_count;
                     var quote_id = getRandomInt(count);
-                    var sql = "SELECT quotes.quote_id, quotes.quote, authors.author, genres.genre FROM quotes, authors, genres WHERE quote_id=? and quotes.author_id=authors.author_id and quotes.genre_id=genres.genre_id ;";
+                    var sql = `SELECT
+                                    quotes.quote_id, quotes.quote, authors.author, genres.genre
+                                FROM
+                                    quotes, authors, genres
+                                WHERE
+                                    quote_id = $1 
+                                    AND quotes.author_id = authors.author_id 
+                                    AND quotes.genre_id = genres.genre_id;`;
                     logMsg('query sql: ' + sql + ', count: ' + count + ' quote_id: ' + quote_id );
-                    connection.query(sql, [quote_id], function (error, rows, fields) {
+                    connection.query(sql, [quote_id], function (error, resp) {
                         if( error ) {
                             logErr(error);
                             res.status(500).json({"error": error });
                         } else {
-                            logMsg('Randome quote from ' + rows[0].author );
-                            res.json( { "source": "CockroachDB", "quote": rows[0].quote, "id": rows[0].quote_id, "author": rows[0].author, "genre": rows[0].genre } );	
+                            const quoteRow = resp.rows[0]
+					        logMsg('Random quote from ' + quoteRow.author );
+                            res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } );	
                         }
-                        logMsg('connection releasing');
-                        connection.release();
+                        logMsg('connection ending');
+                        connection.end();
                     });
                 }
             });
@@ -204,7 +184,10 @@ app.get('/genres',
 	function(req, res) {
         logMsg('request: /genres');
 		getConnection(res,function(connection){
-            var sql = "SELECT genres.genre_id, genres.genre FROM qod.genres";
+            var sql = `SELECT
+                            genres.genre_id, genres.genre
+                        FROM
+                            qod.genres;`;
             logMsg('query sql: ' + sql)
             connection.query(sql, function (error, rows, fields) {
                 if( error ) {
@@ -214,20 +197,26 @@ app.get('/genres',
                     logMsg('genre rows returns: '+rows.length);
                     res.json( rows );	
                 }
-                logMsg('connection releasing');
-                connection.release();
+                logMsg('connection ending');
+                connection.end();
             });
 		});
 	}
 );
 
 app.get('/genres/:id', function(req,res) {
-    var genre_id=req.params.id;
-    logMsg('request: /genres/'+genre_id);
-	getConnection(res,function(connection){
-        var sql = "SELECT genres.genre_id, genres.genre FROM genres WHERE genres.genre_id=?;";
+    var genre_id = req.params.id;
+    logMsg('request: /genres/' + genre_id);
+	getConnection(res, function(connection){
+        var sql = `SELECT
+                genres.genre_id,
+                genres.genre
+            FROM
+                genres
+            WHERE
+                genres.genre_id = $1;`;
         logMsg('query sql: ' + sql);
-		connection.query(sql, [genre_id], function (error, rows, fields) {
+		connection.query(sql, [genre_id], function (error, rows) {
 			if( error ) {
                 logErr(error);
 				res.status(500).json({"error": err });
@@ -241,8 +230,8 @@ app.get('/genres/:id', function(req,res) {
 					res.status(404).json(erObj);
 				}
             }
-            logMsg('connection releasing');
-            connection.release();
+            logMsg('connection ending');
+            connection.end();
 		});
 	});
 });
