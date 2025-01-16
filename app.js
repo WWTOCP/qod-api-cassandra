@@ -90,7 +90,7 @@ app.get('/daily',
                     if( resp.rows.length > 0 ) {
                         logMsg('sql query completed, rows: ' + resp.rows.length)
                         const quoteRow = resp.rows[0]
-                        res.json( { "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
+                        res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
                     } else {
                         logErr('quote id ['+quote_id+'] not found')
                         res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
