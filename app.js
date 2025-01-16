@@ -2,7 +2,7 @@ const express = require('express')
 const pg = require('pg')
 
 var app = express()
-app.set('port',process.env.PORT || 8081)
+app.set('port',process.env.PORT || 8080)
 
 const { Client } = pg
 
