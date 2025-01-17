@@ -22,8 +22,6 @@ function getRandomInt(max) {
 	return Math.floor(Math.random() * Math.floor(max))
 }
 
-//if you see the error message: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' or 'unable to verify the first certificate'
-
 var getConnection = function(res, callback) {
     const dbClient = new Client({
         host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
