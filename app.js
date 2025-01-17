@@ -22,6 +22,10 @@ function getRandomInt(max) {
 	return Math.floor(Math.random() * Math.floor(max))
 }
 
+//if you see the error message: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' or 'unable to verify the first certificate'
+// set the NODE_TLS_REFJECT_UNAUTHORIZED environment variable to 0 and those messages will be ignored.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
 var getConnection = function(res, callback) {
     const dbClient = new Client({
         host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
@@ -29,7 +33,7 @@ var getConnection = function(res, callback) {
         user: process.env.DB_USER || 'user',            // Username (cockroach --insecure mode will have a 'root' user)
         password: process.env.DB_PASS || 'pass',        // Password (cockroach --insecure mode will have an empty password for the 'root' user)
         database: 'qod',         // Specify the database you want to use
-        ssl: false               // Set to true if using SSL, or configure with cert details
+        ssl: true               // Set to true if using SSL, or configure with cert details
     })
     dbClient.connect()
     callback(dbClient)
