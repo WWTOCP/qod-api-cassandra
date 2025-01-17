@@ -24,10 +24,10 @@ function getRandomInt(max) {
 
 var getConnection = function(res, callback) {
     const dbClient = new Client({
-        host: process.env.DB_HOST || 'localhost',       // CockroachDB host
+        host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
         port: 26257,             // Default CockroachDB port
-        user: process.env.DB_USER || 'root',            // Username
-        password: process.env.DB_PASS || '',            // Password (if any, leave empty for default)
+        user: process.env.DB_USER || 'user',            // Username (cockroach --insecure mode will have a 'root' user)
+        password: process.env.DB_PASS || 'pass',        // Password (cockroach --insecure mode will have an empty password for the 'root' user)
         database: 'qod',         // Specify the database you want to use
         ssl: false               // Set to true if using SSL, or configure with cert details
     })
