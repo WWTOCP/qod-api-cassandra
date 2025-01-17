@@ -2,7 +2,7 @@ const express = require('express')
 const pg = require('pg')
 
 var app = express()
-app.set('port',process.env.PORT || 8080)
+app.set('port',process.env.PORT || 8081)
 
 const { Client } = pg
 
@@ -23,8 +23,6 @@ function getRandomInt(max) {
 }
 
 //if you see the error message: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' or 'unable to verify the first certificate'
-// set the NODE_TLS_REFJECT_UNAUTHORIZED environment variable to 0 and those messages will be ignored.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 var getConnection = function(res, callback) {
     const dbClient = new Client({
@@ -33,7 +31,10 @@ var getConnection = function(res, callback) {
         user: process.env.DB_USER || 'user',            // Username (cockroach --insecure mode will have a 'root' user)
         password: process.env.DB_PASS || 'pass',        // Password (cockroach --insecure mode will have an empty password for the 'root' user)
         database: 'qod',         // Specify the database you want to use
-        ssl: true               // Set to true if using SSL, or configure with cert details
+        ssl: {
+            enable: true, // disable SSL/TLS if cockroach is running in "--inssecure" mode.
+            rejectUnauthorized: false // set to false if using a self-signed cert.
+        }
     })
     dbClient.connect()
     callback(dbClient)
@@ -157,6 +158,7 @@ app.get('/random',
                 } else {
                     var count = results.rows[0].quote_count;
                     var quote_id = getRandomInt(count);
+                    console.log(`random quote id: ${quote_id}`)
                     var sql = `SELECT
                                     quotes.quote_id, quotes.quote, authors.author, genres.genre
                                 FROM
