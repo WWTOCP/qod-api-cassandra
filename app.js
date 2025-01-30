@@ -70,18 +70,18 @@ app.get('/daily',
         var quoteId = dailyQuoteId()
         getConnection(res, function(connection) {
             var sql = `SELECT
-                            quote_id, quote--, authors.author, genres.genre
+                            id, text, author, genre
                         FROM
                             quotes
                         WHERE 
-                            quote_id = ?;`
+                            id = ?;`
             connection.execute(sql, [quoteId], { prepare: true })
             .then( result => {
                 logMsg('sql query completed')
                 if( result.rows.length > 0 ) {
                     logMsg('sql query completed, rows: ' + result.rows.length)
                     const quoteRow = result.rows[0]
-                    res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
+                    res.json( { "source": "CockroachDB", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } )
                 } else {
                     logErr('quote id [' + quoteId + '] not found')
                     res.status(404).json({"error": "quote id '" + quoteId + "' doesn't exist." })
@@ -94,37 +94,6 @@ app.get('/daily',
         })
     }
 )
-
-app.get('/quotes/:id', function(req,res) {
-	var quote_id = req.params.id
-    logMsg('request: /quotes/' + quote_id)
-	getConnection(res, function(connection) {
-        var sql = `SELECT
-                        quote_id, quote--, authors.author, genres.genre
-                    FROM
-                        quotes--, authors, genres
-                    WHERE
-                        quote_id = ?; 
-                    `;
-        logMsg('query sql: ' + sql)
-		connection.execute(sql, [quote_id], { prepare: true })
-        .then( result => {
-            logMsg('sql query completed')
-            if( result.rows.length > 0 ) {
-                logMsg('sql query completed, rows: ' + result.rows.length)
-                const quoteRow = result.rows[0]
-                res.json( { "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
-            } else {
-                logErr('quote id [' + quote_id + '] not found')
-                res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
-            }
-    	})
-        .catch(error => {
-            logErr(error)
-            res.status(500).json({"error": error })  
-        })
-	});
-});
 
 app.get('/random',  
 	function(req, res) {
@@ -141,17 +110,17 @@ app.get('/random',
                 var quote_id = getRandomInt(count);
                 console.log(`random quote id: ${quote_id}`)
                 var sql = `SELECT
-                                quote_id, quote
+                                id, text, author, genre
                             FROM
                                 quotes
                             WHERE
-                                quote_id = ?;`;
+                                id = ?;`;
                 logMsg('query sql: ' + sql + ', quotes row count: ' + count + ' quote_id: ' + quote_id );
                 connection.execute(sql, [quote_id], { prepare: true })
                 .then(result => {
                     const quoteRow = result.rows[0]
                     logMsg('Random quote from ' + quoteRow.author );
-                    res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } );	
+                    res.json( { "source": "CockroachDB", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } );	
                 })
                 .catch(error => {
                     // Expected 4 or 0 byte int (8)
@@ -166,59 +135,6 @@ app.get('/random',
         });
 	}
 );
-
-app.get('/genres',  
-	function(req, res) {
-        logMsg('request: /genres');
-		getConnection(res, function(connection){
-            var sql = `SELECT
-                            genre_id,
-                            genre
-                        FROM
-                            genres;`;
-            logMsg('query sql: ' + sql)
-            connection.execute(sql)
-            .then( result => {
-                logMsg('genre rows returns: ' + result.rows.length);
-                res.json( result.rows );
-            })
-            .catch( error => {
-                logErr(error);
-                res.status(500).json({"error": error });
-            })
-		});
-	}
-);
-
-app.get('/genres/:id', function(req,res) {
-    var genre_id = req.params.id;
-    logMsg('request: /genres/' + genre_id);
-	getConnection(res, function(connection){
-        var sql = `SELECT
-                genre_id,
-                genre
-            FROM
-                genres
-            WHERE
-                genre_id = ?;`;
-        logMsg('query sql: ' + sql);
-		connection.execute(sql, [genre_id], { prepare: true })
-        .then(result => {
-            logMsg('sql query completed, rows: '+ result.rows.length);
-            if( result.rows.length > 0 ) {
-                res.json( { "genre_id": result.rows[0].genre_id, "genre": result.rows[0].genre } );	
-            } else {
-                var erObj = {"error": "genre id '"+ genre_id + "' doesn't exist." };
-                logErr(erObj);
-                res.status(404).json(erObj);
-            }
-        })
-        .catch(error => {
-            logErr(error);
-            res.status(500).json({ "error": error });
-        });
-	});
-});
 
 app.get('/',  
 	function(req, res) {
@@ -247,19 +163,6 @@ app.listen(app.get('port'), '0.0.0.0', function() {
         console.log(`${key}: ${process.env[key]}`);
       }
 });
-
-function shutdown() {
-    console.log('Shutting down server...');
-    dbClient.end();
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit(0); // Exit the process
-    });
-}
-
-// Listen for termination signals (e.g., Ctrl+C, Docker stop)
-//process.on('SIGINT', shutdown);  // Ctrl+C in the terminal
-//process.on('SIGTERM', shutdown); // Termination signal from the system
 
 
 
