@@ -64,53 +64,32 @@ function dailyQuoteId(){
     return day
 }
 
-app.get('/author/:id',
-    async function(req, res) {
-        console.log('author endpoint executing...')
-        try {
-            //const dbres = dbClient.query('SELECT $1::text as message', ['Hello world!'])
-            //console.log(dbres.rows[0].message) // Hello world!
-            var authorId = req.params.id;
-            const dbres = await dbClient.query('select author from authors where author_id = $1', [authorId])
-            console.log(`# of db rows: ${dbres.rows.length}`)
-            console.log(`Author Id: ${authorId} name is: ${dbres.rows[0].author}`)
-            res.json(dbres.rows[0])
-        } catch (ex) {
-            console.log(ex.message)
-        }
-    }
-)
-
 app.get('/daily', 	
 	async function(req, res) {
         logMsg('request: /daily')
         var quoteId = dailyQuoteId()
         getConnection(res, function(connection) {
             var sql = `SELECT
-                            quotes.quote_id, quotes.quote, authors.author, genres.genre
+                            quote_id, quote,--, authors.author, genres.genre
                         FROM
-                            quotes, authors, genres
+                            quotes
                         WHERE 
-                            quotes.quote_id = $1
-                            AND quotes.author_id = authors.author_id
-                            AND quotes.genre_id = genres.genre_id;`
-            connection.query(sql, [quoteId], function(error, resp) {
+                            quote_id = ?;`
+            connection.execute(sql, [quoteId], { prepare: true })
+            .then( result => {
                 logMsg('sql query completed')
-                if( error ) {
-                    logErr(error)
-                    res.status(500).json({"error": err })
+                if( result.rows.length > 0 ) {
+                    logMsg('sql query completed, rows: ' + result.rows.length)
+                    const quoteRow = result.rows[0]
+                    res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
                 } else {
-                    if( resp.rows.length > 0 ) {
-                        logMsg('sql query completed, rows: ' + resp.rows.length)
-                        const quoteRow = resp.rows[0]
-                        res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
-                    } else {
-                        logErr('quote id ['+quote_id+'] not found')
-                        res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
-                    }
-                    logMsg('connection ending');
-                    connection.end();
+                    logErr('quote id [' + quoteId + '] not found')
+                    res.status(404).json({"error": "quote id '" + quoteId + "' doesn't exist." })
                 }
+            })
+            .catch(error => {
+                logErr(error)
+                res.status(500).json({"error": error })
             })
         })
     }
@@ -121,32 +100,29 @@ app.get('/quotes/:id', function(req,res) {
     logMsg('request: /quotes/' + quote_id)
 	getConnection(res, function(connection) {
         var sql = `SELECT
-                        quotes.quote_id, quotes.quote, authors.author, genres.genre
+                        quote_id, quote--, authors.author, genres.genre
                     FROM
-                        quotes, authors, genres
+                        quotes--, authors, genres
                     WHERE
-                        quotes.quote_id = $1 
-                        AND quotes.author_id = authors.author_id 
-                        AND quotes.genre_id = genres.genre_id;`;
+                        quote_id = ?; 
+                    `;
         logMsg('query sql: ' + sql)
-		connection.query(sql, [quote_id], function(error, resp) {
+		connection.execute(sql, [quote_id], { prepare: true })
+        .then( result => {
             logMsg('sql query completed')
-            if( error ) {
-                logErr(error)
-				res.status(500).json({"error": err })
-			} else {
-				if( resp.rows.length > 0 ) {
-                    logMsg('sql query completed, rows: ' + resp.rows.length)
-                    const quoteRow = resp.rows[0]
-					res.json( { "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
-				} else {
-                    logErr('quote id ['+quote_id+'] not found')
-					res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
-                }
-                logMsg('connection ending');
-				connection.end();
-			}
-		});
+            if( result.rows.length > 0 ) {
+                logMsg('sql query completed, rows: ' + result.rows.length)
+                const quoteRow = result.rows[0]
+                res.json( { "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } )
+            } else {
+                logErr('quote id [' + quote_id + '] not found')
+                res.status(404).json({"error": "quote id '" + quote_id + "' doesn't exist." })
+            }
+    	})
+        .catch(error => {
+            logErr(error)
+            res.status(500).json({"error": error })  
+        })
 	});
 });
 
@@ -159,45 +135,42 @@ app.get('/random',
                         FROM
                             quotes;`;
             logMsg('query sql: ' + sql)
-            connection.query(sql, function (error, results) {
-                if( error ) {
+            connection.execute(sql)
+            .then(result => {
+                var count = result.rows[0].quote_count;
+                var quote_id = getRandomInt(count);
+                console.log(`random quote id: ${quote_id}`)
+                var sql = `SELECT
+                                quote_id, quote
+                            FROM
+                                quotes
+                            WHERE
+                                quote_id = ?;`;
+                logMsg('query sql: ' + sql + ', quotes row count: ' + count + ' quote_id: ' + quote_id );
+                connection.execute(sql, [quote_id], { prepare: true })
+                .then(result => {
+                    const quoteRow = result.rows[0]
+                    logMsg('Random quote from ' + quoteRow.author );
+                    res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } );	
+                })
+                .catch(error => {
+                    // Expected 4 or 0 byte int (8)
                     logErr(error);
                     res.status(500).json({"error": error });
-                } else {
-                    var count = results.rows[0].quote_count;
-                    var quote_id = getRandomInt(count);
-                    console.log(`random quote id: ${quote_id}`)
-                    var sql = `SELECT
-                                    quotes.quote_id, quotes.quote, authors.author, genres.genre
-                                FROM
-                                    quotes, authors, genres
-                                WHERE
-                                    quote_id = $1 
-                                    AND quotes.author_id = authors.author_id 
-                                    AND quotes.genre_id = genres.genre_id;`;
-                    logMsg('query sql: ' + sql + ', count: ' + count + ' quote_id: ' + quote_id );
-                    connection.query(sql, [quote_id], function (error, resp) {
-                        if( error ) {
-                            logErr(error);
-                            res.status(500).json({"error": error });
-                        } else {
-                            const quoteRow = resp.rows[0]
-					        logMsg('Random quote from ' + quoteRow.author );
-                            res.json( { "source": "CockroachDB", "quote": quoteRow.quote, "id": quoteRow.quote_id, "author": quoteRow.author, "genre": quoteRow.genre } );	
-                        }
-                        logMsg('connection ending');
-                        connection.end();
-                    });
-                }
-            });
-		});
+                })
+            })
+            .catch(error => {
+                logErr(error);
+                res.status(500).json({"error": error });
+            })
+        });
 	}
 );
 
 app.get('/genres',  
 	function(req, res) {
         logMsg('request: /genres');
-		getConnection(res,function(connection){
+		getConnection(res, function(connection){
             var sql = `SELECT
                             genre_id,
                             genre
