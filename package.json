@@ -6,8 +6,8 @@
 		"start": "node app.js"
 	},
 	"dependencies": {
-		"express": "4.*",
-		"pg": "^8.13.1"
+		"cassandra-driver": "^4.7.2",
+		"express": "4.*"
 	},
 	"repository": {}
 }

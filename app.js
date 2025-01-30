@@ -1,10 +1,17 @@
 const express = require('express')
-const pg = require('pg')
+const cassandra = require('cassandra-driver');
+
+const client = new cassandra.Client({
+  contactPoints: [process.env.DB_HOST || '127.0.0.1'],
+  localDataCenter: process.env.DB_DATACENTER || 'datacenter1',
+  keyspace: 'qod'
+});
+
 
 var app = express()
 app.set('port',process.env.PORT || 8080)
 
-const { Client } = pg
+//const { Client } = pg
 
 function logMsg( msg ) {
     console.log(msg)
@@ -23,8 +30,11 @@ function getRandomInt(max) {
 }
 
 var getConnection = function(res, callback) {
-    const dbClient = new Client({
-        host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
+    const dbClient = new cassandra.Client({
+        contactPoints: [process.env.DB_HOST || '127.0.0.1'],
+        localDataCenter: 'datacenter1', // default data center name
+        keyspace: 'qod'
+        /*host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
         port: 26257,             // Default CockroachDB port
         user: process.env.DB_USER || 'user',            // Username (cockroach --insecure mode will have a 'root' user)
         password: process.env.DB_PASS || 'pass',        // Password (cockroach --insecure mode will have an empty password for the 'root' user)
@@ -32,7 +42,7 @@ var getConnection = function(res, callback) {
         ssl: {
             enable: true, // disable SSL/TLS if cockroach is running in "--inssecure" mode.
             rejectUnauthorized: false // set to false if using a self-signed cert.
-        }
+        }*/
     })
     dbClient.connect()
     callback(dbClient)
@@ -189,21 +199,20 @@ app.get('/genres',
         logMsg('request: /genres');
 		getConnection(res,function(connection){
             var sql = `SELECT
-                            genres.genre_id, genres.genre
+                            genre_id,
+                            genre
                         FROM
-                            qod.genres;`;
+                            genres;`;
             logMsg('query sql: ' + sql)
-            connection.query(sql, function (error, rows, fields) {
-                if( error ) {
-                    logErr(error);
-                    res.status(500).json({"error": error });
-                } else {
-                    logMsg('genre rows returns: '+rows.length);
-                    res.json( rows );	
-                }
-                logMsg('connection ending');
-                connection.end();
-            });
+            connection.execute(sql)
+            .then( result => {
+                logMsg('genre rows returns: ' + result.rows.length);
+                res.json( result.rows );
+            })
+            .catch( error => {
+                logErr(error);
+                res.status(500).json({"error": error });
+            })
 		});
 	}
 );
@@ -213,30 +222,28 @@ app.get('/genres/:id', function(req,res) {
     logMsg('request: /genres/' + genre_id);
 	getConnection(res, function(connection){
         var sql = `SELECT
-                genres.genre_id,
-                genres.genre
+                genre_id,
+                genre
             FROM
                 genres
             WHERE
-                genres.genre_id = $1;`;
+                genre_id = ?;`;
         logMsg('query sql: ' + sql);
-		connection.query(sql, [genre_id], function (error, rows) {
-			if( error ) {
-                logErr(error);
-				res.status(500).json({"error": err });
-			} else {
-                logMsg('sql query completed, rows: '+rows.length);
-				if( rows.length > 0 ) {
-					res.json( { "genre_id": rows[0].genre_id, "genre": rows[0].genre } );	
-				} else {
-                    var erObj = {"error": "genre id '"+ genre_id + "' doesn't exist." };
-                    logErr(erObj);
-					res.status(404).json(erObj);
-				}
+		connection.execute(sql, [genre_id], { prepare: true })
+        .then(result => {
+            logMsg('sql query completed, rows: '+ result.rows.length);
+            if( result.rows.length > 0 ) {
+                res.json( { "genre_id": result.rows[0].genre_id, "genre": result.rows[0].genre } );	
+            } else {
+                var erObj = {"error": "genre id '"+ genre_id + "' doesn't exist." };
+                logErr(erObj);
+                res.status(404).json(erObj);
             }
-            logMsg('connection ending');
-            connection.end();
-		});
+        })
+        .catch(error => {
+            logErr(error);
+            res.status(500).json({ "error": error });
+        });
 	});
 });
 
