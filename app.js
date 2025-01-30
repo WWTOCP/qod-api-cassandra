@@ -70,7 +70,7 @@ app.get('/daily',
         var quoteId = dailyQuoteId()
         getConnection(res, function(connection) {
             var sql = `SELECT
-                            quote_id, quote,--, authors.author, genres.genre
+                            quote_id, quote--, authors.author, genres.genre
                         FROM
                             quotes
                         WHERE 
