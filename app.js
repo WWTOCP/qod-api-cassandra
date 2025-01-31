@@ -32,27 +32,12 @@ function getRandomInt(max) {
 var getConnection = function(res, callback) {
     const dbClient = new cassandra.Client({
         contactPoints: [process.env.DB_HOST || '127.0.0.1'],
-        localDataCenter: 'datacenter1', // default data center name
+        localDataCenter: 'datacenter1', // yes, the default data center is 'datacenter1'
         keyspace: 'qod'
-        /*host: process.env.DB_HOST || '127.0.0.1',       // CockroachDB host
-        port: 26257,             // Default CockroachDB port
-        user: process.env.DB_USER || 'user',            // Username (cockroach --insecure mode will have a 'root' user)
-        password: process.env.DB_PASS || 'pass',        // Password (cockroach --insecure mode will have an empty password for the 'root' user)
-        database: 'qod',         // Specify the database you want to use
-        ssl: {
-            enable: true, // disable SSL/TLS if cockroach is running in "--inssecure" mode.
-            rejectUnauthorized: false // set to false if using a self-signed cert.
-        }*/
     })
     dbClient.connect()
     callback(dbClient)
 }
-
-// function between(min, max) {  
-//     return Math.floor(
-//       Math.random() * (max - min) + min
-//     )
-// }
 
 function dailyQuoteId(){
     // assumes the order of the database is random, and day of year is same as quote id.
@@ -81,7 +66,7 @@ app.get('/daily',
                 if( result.rows.length > 0 ) {
                     logMsg('sql query completed, rows: ' + result.rows.length)
                     const quoteRow = result.rows[0]
-                    res.json( { "source": "CockroachDB", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } )
+                    res.json( { "source": "cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } )
                 } else {
                     logErr('quote id [' + quoteId + '] not found')
                     res.status(404).json({"error": "quote id '" + quoteId + "' doesn't exist." })
@@ -120,7 +105,7 @@ app.get('/random',
                 .then(result => {
                     const quoteRow = result.rows[0]
                     logMsg('Random quote from ' + quoteRow.author );
-                    res.json( { "source": "CockroachDB", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } );	
+                    res.json( { "source": "cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } );	
                 })
                 .catch(error => {
                     // Expected 4 or 0 byte int (8)
