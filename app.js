@@ -1,5 +1,7 @@
 const express = require('express')
 const cassandra = require('cassandra-driver');
+const http = require('http');
+const https = require('https');
 
 const client = new cassandra.Client({
   contactPoints: [process.env.DB_HOST || '127.0.0.1'],
@@ -119,6 +121,32 @@ app.get('/random',
             })
         });
 	}
+);
+
+app.get('/httpclient', 
+    function(req, res) {
+        // Choose the correct module based on the protocol
+        const url = req.query.url
+        if (!url) {
+            return res.status(400).json({
+                "endpoint": "/httpclient",
+                "error": "Missing 'url' query parameter"
+            });
+        }
+        const protocol = url.startsWith('https') ? https : http;
+        const options = new URL(url); // Parses the URL into hostname, path, and protocol
+        const httpReq = protocol.request(options, (httpRes) => {
+            let data = '';
+            httpRes.on('data', (chunk) => {
+                data += chunk;
+            });
+            httpRes.on('end', () => {
+                res.json ( {"endpoint" : "/httpclient", "url" : url, "httpStatusCode" : httpRes.statusCode, "output" : data.substring(0, data.length > 500 ? 500 : data.length)})
+                console.log(data);
+            });
+        });
+        httpReq.end()
+    }
 );
 
 app.get('/',  
