@@ -66,7 +66,7 @@ app.get('/daily',
                 if( result.rows.length > 0 ) {
                     logMsg('sql query completed, rows: ' + result.rows.length)
                     const quoteRow = result.rows[0]
-                    res.json( { "source": "cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } )
+                    res.json( { "source": "Cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } )
                 } else {
                     logErr('quote id [' + quoteId + '] not found')
                     res.status(404).json({"error": "quote id '" + quoteId + "' doesn't exist." })
@@ -105,7 +105,7 @@ app.get('/random',
                 .then(result => {
                     const quoteRow = result.rows[0]
                     logMsg('Random quote from ' + quoteRow.author );
-                    res.json( { "source": "cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } );	
+                    res.json( { "source": "Cassandra", "quote": quoteRow.text, "id": quoteRow.id, "author": quoteRow.author, "genre": quoteRow.genre } );	
                 })
                 .catch(error => {
                     // Expected 4 or 0 byte int (8)
